@@ -1,0 +1,6 @@
+{
+    "python.pythonPath": "/Users/Anton/anaconda3/envs/edge/bin/python",
+    "python.linting.pylintEnabled": false,
+    "python.linting.mypyEnabled": true,
+    "python.linting.enabled": true
+}
