@@ -6,7 +6,6 @@ class Node:
     def __init__(self):
         self.consumers = []
         self.output = None
-        _default_graph.nodes.append(self)
     
     def __add__(self, other):
         return Add(self, other)
@@ -28,6 +27,9 @@ class Node:
         else:
             return NotImplemented
     
+    def inputs(self):
+        return []
+    
     def backward(self, a):
         return [a]
     
@@ -41,7 +43,9 @@ class Operation(Node):
             node.consumers.append(self)
         
         super().__init__()
-        
+    
+    def inputs(self):
+        return self.input_nodes
     
     def compute(self, *inputs):
         pass

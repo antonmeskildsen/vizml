@@ -1,17 +1,35 @@
 import numpy as np
+from nxpd import draw
+import pydotplus as pd
 
 from nodes import *
 
-_default_graph = None
 
 class Graph:
 
     def __init__(self):
         self.nodes = []
-    
-    def as_default(self):
-        global _default_graph
-        _default_graph = self
+
+    attr_map = {
+        Variable: { 'fillcolor': 'green' }
+    }
+
+    default_attrs = { 'style': 'filled', 'fillcolor': 'blue' }
+
+
+    def to_dot(self, dot):
+        m = {node: i for i, node in enumerate(self.nodes)}
+
+        reverse_post = DepthFirstOrder(self).reverse_post
+        for node in reversed(reverse_post):
+            attrs = Graph.attr_map.get(type(node), Graph.default_attrs)
+            attrs = {**attrs, **Graph.default_attrs}
+
+            dot.add_node(pd.Node(m[node], label=f'"{node}"', **attrs))
+            for c in node.consumers:
+                dot.add_edge(pd.Edge(m[node], m[c]))
+
+
     
     def to_nx(self):
         reverse_post = DepthFirstOrder(self).reverse_post
@@ -21,10 +39,36 @@ class Graph:
         m = {node: i for i, node in enumerate(self.nodes)}
 
         for node in reverse_post:
-            g.add_node(m[node], label=f'"{node}"')
+            attrs = Graph.attr_map.get(type(node), Graph.default_attr)
+            g.add_node(m[node], label=f'"{node}"', **attrs)
             for c in node.consumers:
                     g.add_edge(m[node], m[c])
         
+        return g
+
+
+    def draw(self):
+        out = pd.Dot()
+        self.to_dot(out)
+        out.write('resources/t3.dot', format='dot')
+        #ng = self.to_nx()
+        #draw(ng, args=['-Nfontname=Fira Code Regular'], format='dot', filename='resources/t2.dot', prefix='hej')
+    
+
+    def add_all(self, node):
+        if node is None:
+            return
+        
+        self.nodes.append(node)
+
+        for n in node.inputs():
+            self.add_all(n)
+    
+
+    @staticmethod
+    def from_node(node):
+        g = Graph()
+        g.add_all(node)
         return g
                     
 
@@ -84,7 +128,7 @@ class Session:
     def run(self, graph, feed_dict={}):
         nodes_postorder = DepthFirstOrder(graph).reverse_post
 
-        for node in nodes_postorder:
+        for node in reversed(nodes_postorder):
 
             if type(node) == Input:
                 # Set the node value to the placeholder value from feed_dict
