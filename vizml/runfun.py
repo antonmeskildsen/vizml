@@ -21,6 +21,8 @@ res = Output(z, 'result')
 
 #back(z)
 
+#### NOTE: Use iterators / generators for calculation (more instructive than magic)
+
 g = Graph.from_node(res)
 
 

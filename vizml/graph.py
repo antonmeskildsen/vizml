@@ -1,5 +1,4 @@
 import numpy as np
-from nxpd import draw
 import pydotplus as pd
 
 from nodes import *
@@ -28,23 +27,6 @@ class Graph:
             dot.add_node(pd.Node(m[node], label=f'"{node}"', **attrs))
             for c in node.consumers:
                 dot.add_edge(pd.Edge(m[node], m[c]))
-
-
-    
-    def to_nx(self):
-        reverse_post = DepthFirstOrder(self).reverse_post
-
-        g = nx.DiGraph()
-
-        m = {node: i for i, node in enumerate(self.nodes)}
-
-        for node in reverse_post:
-            attrs = Graph.attr_map.get(type(node), Graph.default_attr)
-            g.add_node(m[node], label=f'"{node}"', **attrs)
-            for c in node.consumers:
-                    g.add_edge(m[node], m[c])
-        
-        return g
 
 
     def draw(self):
