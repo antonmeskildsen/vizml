@@ -13,7 +13,6 @@ x = Input('x')
 
 z = B * (A + (x**2))
 res = Output(z, 'result')
-
 #z = A*x
 
 #d = Graph()
@@ -35,4 +34,4 @@ print(z.output)
 
 print(type(Variable))
 
-g.draw()
+g.draw(open_in_editor=True)

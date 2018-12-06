@@ -1,41 +1,76 @@
+import os
+from collections import defaultdict
+
 import numpy as np
 import pydotplus as pd
 
-from nodes import *
+from nodes import Variable, Operation, Constant, Input, Output
 
+
+def of(*nodes):
+    g = Graph()
+    for node in nodes:
+        g.add_all(node)
+    return g
 
 class Graph:
 
     def __init__(self):
         self.nodes = []
 
-    attr_map = {
-        Variable: { 'fillcolor': 'green' }
-    }
+    default_attrs = { 'style': 'filled', 'fontname': 'Avenir'}
 
-    default_attrs = { 'style': 'filled', 'fillcolor': 'blue' }
+    attr_map = defaultdict(lambda: Graph.default_attrs, {
+        'variable': {'fillcolor': '#27AE60', **default_attrs},
+        'operation': { 'fillcolor': '#D35400', **default_attrs},
+        'constant': { 'fillcolor': '#3498DB', **default_attrs},
+        'input': { 'fillcolor': '#3498DB', **default_attrs},
+        'output': { 'fillcolor': '#1ABC9C', **default_attrs},
+    })
 
+    type_conv = [
+        (Input, 'input'),
+        (Output, 'output'),
+        (Constant, 'constant'),
+        (Variable, 'variable'),
+        (Operation, 'operation'),
+    ]
+
+    def type_to_key(self, node):
+        for typ, key in Graph.type_conv:
+            if issubclass(node.__class__, typ):
+                return key
+        return None
 
     def to_dot(self, dot):
         m = {node: i for i, node in enumerate(self.nodes)}
 
-        reverse_post = DepthFirstOrder(self).reverse_post
-        for node in reversed(reverse_post):
-            attrs = Graph.attr_map.get(type(node), Graph.default_attrs)
-            attrs = {**attrs, **Graph.default_attrs}
-
+        for node in self:
+            attrs = Graph.attr_map[self.type_to_key(node)]
             dot.add_node(pd.Node(m[node], label=f'"{node}"', **attrs))
             for c in node.consumers:
-                dot.add_edge(pd.Edge(m[node], m[c]))
+                if c in self.nodes:
+                    dot.add_edge(pd.Edge(m[node], m[c]))
 
 
-    def draw(self):
+    def export(self, open_in_editor=False):
         out = pd.Dot()
         self.to_dot(out)
-        out.write('resources/t3.dot', format='dot')
+        out.set_graph_defaults(fontname='"helvetica"')
+        out.write('resources/t4.pdf', format='pdf')
+        if open_in_editor:
+            os.system('open /Users/Anton/Documents/git/vizml/resources/t4.pdf')
         #ng = self.to_nx()
         #draw(ng, args=['-Nfontname=Fira Code Regular'], format='dot', filename='resources/t2.dot', prefix='hej')
     
+    def draw(self):
+        out = pd.Dot()
+        self.to_dot(out)
+        out.set_graph_defaults(fontname='"helvetica"')
+        return out.create(format='svg').decode('utf-8')
+
+    def _repr_html_(self):
+        return self.draw()
 
     def add_all(self, node):
         if node is None:
@@ -46,13 +81,13 @@ class Graph:
         for n in node.inputs():
             self.add_all(n)
     
-
-    @staticmethod
-    def from_node(node):
-        g = Graph()
-        g.add_all(node)
-        return g
-                    
+    def topological(self):
+        reverse_post = DepthFirstOrder(self).reverse_post
+        return reversed(reverse_post)
+        
+    def __iter__(self):
+        return self.topological()
+    
 
 class DepthFirstOrder:
 

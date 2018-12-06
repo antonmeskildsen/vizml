@@ -1,6 +1,8 @@
 import operator
 import networkx as nx
 
+import graph
+
 class Node:
 
     def __init__(self):
@@ -32,6 +34,12 @@ class Node:
     
     def backward(self, a):
         return [a]
+
+    def _repr_html_(self):
+        return graph.of(self).draw()
+    
+    def graph(self):
+        return graph.of(self)
     
  
 class Operation(Node):
@@ -102,7 +110,7 @@ class Variable(Node):
     
     def __str__(self):
         if self.name is not None:
-            return f'{self.name}<-{self.value}'
+            return f'{self.name}←{self.value}'
         else:
             return str(self.value)
 
@@ -127,7 +135,10 @@ class Output(Operation):
         self.value = input
     
     def __str__(self):
-        return self.name
+        if self.name is None:
+            return 'output'
+        else:
+            return self.name
 
 
 class Input(Node):
@@ -138,7 +149,7 @@ class Input(Node):
         super().__init__()
     
     def __str__(self):
-        if self.name is not None:
-            return str(self.name)
+        if self.name == None:
+            return 'input'
         else:
-            return '{}'
+            return self.name
