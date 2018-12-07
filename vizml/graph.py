@@ -79,14 +79,15 @@ class Graph:
         self.nodes.append(node)
 
         for n in node.inputs():
-            self.add_all(n)
+            if n not in self.nodes:
+                self.add_all(n)
     
     def topological(self):
         reverse_post = DepthFirstOrder(self).reverse_post
-        return reversed(reverse_post)
+        return reverse_post
         
     def __iter__(self):
-        return self.topological()
+        return iter(self.topological())
     
 
 class DepthFirstOrder:
@@ -102,11 +103,9 @@ class DepthFirstOrder:
     
     def dfs(self, node):
         self.marked[node] = True
-        if type(node) == Operation:
-            for li in node.input_nodes:
-                for w in li:
-                    if not self.marked[w]:
-                        self.dfs(w)
+        for n in node.input_nodes:
+            if not self.marked[n]:
+                self.dfs(n)
 
         self.reverse_post.append(node)
 

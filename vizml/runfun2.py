@@ -6,17 +6,37 @@ from graph import Session
 from nodes import Variable, Input, Output, Constant
 
 
-A = Variable(1, 'A')
-B = Variable(2, 'B')
 
-x = Input('x')
+X = Input('X')
+W1 = Variable(1, 'W1')
 
-z = B * (A + ((x+A)**2))
-res = Output(z, 'result')
+a1 = X*W1
+
+Y = Input('Y')
+W2 = Variable(2, 'W2')
+
+a2 = Y*W2
+
+a3 = X * a2
+
+out = Output(a1 + a2 + a3)
 
 
-z._repr_html_()
 
-from gvanim import Animation
-from gvanim.jupyter import interactive
-ga = Animation()
+
+ctx = {
+    'X': 2,
+    'Y': 3
+}
+
+for node in out.graph():
+    print(node)
+    if isinstance(node, Input):
+        x = node.compute(ctx[node.name])
+    elif isinstance(node, Variable) or isinstance(node, Constant):
+        x = node.compute()
+    else:
+        inputs = [n.value for n in node.input_nodes]
+        x = node.compute(*inputs)
+
+print(x)
