@@ -18,7 +18,7 @@ class Graph:
     def __init__(self):
         self.nodes = []
 
-    default_attrs = { 'style': 'filled', 'fontname': 'Avenir'}
+    default_attrs = { 'style': 'filled', 'fontname': 'Helvetica'}
 
     attr_map = defaultdict(lambda: Graph.default_attrs, {
         'variable': {'fillcolor': '#27AE60', **default_attrs},
@@ -48,9 +48,11 @@ class Graph:
         for node in self:
             attrs = Graph.attr_map[self.type_to_key(node)]
             dot.add_node(pd.Node(m[node], label=f'"{node}"', **attrs))
+            
+            l = str(node.value) if node.value is not None else ''
             for c in node.consumers:
                 if c in self.nodes:
-                    dot.add_edge(pd.Edge(m[node], m[c]))
+                    dot.add_edge(pd.Edge(m[node], m[c], label=l))
 
 
     def export(self, open_in_editor=False):
@@ -85,6 +87,9 @@ class Graph:
     def topological(self):
         reverse_post = DepthFirstOrder(self).reverse_post
         return reverse_post
+
+    def topological_reverse(self):
+        return reversed(self.topological())
         
     def __iter__(self):
         return iter(self.topological())
@@ -141,24 +146,15 @@ def traverse_postorder(operation):
 
 class Session:
 
-    def run(self, graph, feed_dict={}):
-        nodes_postorder = DepthFirstOrder(graph).reverse_post
-
-        for node in reversed(nodes_postorder):
-
-            if type(node) == Input:
-                # Set the node value to the placeholder value from feed_dict
-                node.output = feed_dict[node]
-            elif type(node) == Variable or type(node) == Constant:
-                # Set the node value to the variable's value attribute
-                node.output = node.value
-            else:  # Operation
-                # Get the input values for this operation from node_values
-                node.inputs = [input_node.output for input_node in node.input_nodes]
-
-                # Compute the output of this operation
-                node.output = node.compute(*node.inputs)
-
-            # Convert lists to numpy arrays
-            if type(node.output) == list:
-                node.output = np.array(node.output)
+    def run(self, graph, ctx):
+        for node in graph.topological():
+            if isinstance(node, Input):
+                if node.name not in ctx:
+                    raise ValueError(f'Value for Input <{node.name}> was not provided in context')
+                x = node.compute(ctx[node.name])
+            elif isinstance(node, Variable) or isinstance(node, Constant):
+                x = node.compute()
+            else:
+                inputs = [n.value for n in node.input_nodes]
+                x = node.compute(*inputs)
+        return x

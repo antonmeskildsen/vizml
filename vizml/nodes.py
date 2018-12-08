@@ -1,13 +1,16 @@
 import operator
 import networkx as nx
+import numpy as np
 
 import graph
 
 class Node:
 
-    def __init__(self, value=None):
+    def __init__(self, value=None, derived=None):
         self.consumers = []
+        self.input_values = None
         self.value = value
+        self.derived = derived
     
     def __add__(self, other):
         return Add(self, other)
@@ -29,21 +32,17 @@ class Node:
         else:
             return NotImplemented
     
+    def __call__(self, ctx={}):
+        return graph.Session().run(self.graph(), ctx)
+    
     def inputs(self):
         return []
-
-    def forward(self):
-        pass
     
     def compute(self, *inputs):
         pass
     
-    def save(self, value):
-        self.value = value
-        return value
-    
     def backward(self, a):
-        return [a]
+        pass
 
     def _repr_html_(self):
         return graph.of(self).draw()
@@ -53,6 +52,14 @@ class Node:
     
  
 class Operation(Node):
+
+    symbol = None
+
+    def op(self, *inputs):
+        pass
+
+    def back_op(self, val):
+        pass
 
     def __init__(self, input_nodes=[]):
         self.input_nodes = input_nodes
@@ -64,54 +71,55 @@ class Operation(Node):
     
     def inputs(self):
         return self.input_nodes
-    
-    def forward(self):
-        inputs = [node.value for node in self.input_nodes]
-        return self.save(inputs)
+
+    def compute(self, *inputs):
+        self.input_values = inputs
+        self.value = self.op(*inputs)
+        return self.value
+
+    def backward(self, val):
+        return self.back_op(val)
 
 
 class Binary(Operation):
 
-    def __init__(self, l, r, symbol, op):
-        self.symbol = symbol
-        self.op = op
-
+    def __init__(self, l, r):
         super().__init__([l, r])
     
-    def forward(self):
-        inputs = [node.value for node in self.input_nodes]
-        return self.save(self.op(*inputs))
-    
     def compute(self, l_val, r_val):
-        return self.save(self.op(l_val, r_val))
+        return super().compute(l_val, r_val)
 
     def __str__(self):
         return self.symbol
 
-    @staticmethod
-    def create(symbol, op):
-        return lambda l, r: Binary(l, r, symbol, op)
 
+# Binary operations
+class Add(Binary):
+
+    symbol = '+'
+
+    def op(self, l_val, r_val):
+        return np.add(l_val, r_val)
+
+    def back_op(self, val):
+        return (val, val)
 
 class Mul(Binary):
 
-    def __init__(self, l, r):
-        super().__init__(l, r, '*', operator.mul)
+    symbol = '*'
 
-    
-    def backward(self, a):
-        return [Mul(self.input_nodes[1], a), Mul(self.input_nodes[0], a)]
+    def op(self, l_val, r_val):
+        return np.multiply(l_val, r_val)
+
+    def back_op(self, val):
+        l_val, r_val = self.input_values
+        return (val*r_val, val*l_val)
 
 
-
-
-
-Add = Binary.create('+', operator.add)
-Sub = Binary.create('-', operator.sub)
-#Mul = Binary.create('*', operator.mul)
-Div = Binary.create('/', operator.truediv)
-Pow = Binary.create('^', operator.pow)
-Matmul = Binary.create('@', operator.matmul)
+#Sub = Binary.create('-', np.subtract, )
+#Div = Binary.create('/', np.divide)
+#Pow = Binary.create('^', np.power)
+#Matmul = Binary.create('@', np.dot)
 
 
 
@@ -124,11 +132,12 @@ class Variable(Node):
 
         super().__init__(initial_value)
     
-    def forward(self):
-        return self.value
     
     def compute(self):
         return self.value
+    
+    def backward(self, val):
+        pass
     
     def __str__(self):
         if self.name is not None:
@@ -142,12 +151,6 @@ class Constant(Variable):
     def __init__(self, value):
         self.input_nodes=[]
         super().__init__(value)
-    
-    def forward(self):
-        return self.value
-    
-    def compute(self):
-        return self.value
 
     def __str__(self):
         return str(self.value)
@@ -159,14 +162,12 @@ class Output(Operation):
         super().__init__([input])
         self.name = name
     
-
-    
-    def forward(self):
-        inputs = [node.value for node in self.input_nodes]
-        self.save(inputs)
-    
     def compute(self, input):
-        return self.save(input)
+        self.value = input
+        return input
+    
+    def backward(self, val):
+        return 1
     
     def __str__(self):
         if self.name is None:
@@ -183,14 +184,12 @@ class Input(Node):
 
         super().__init__()
     
-    def input(self, value):
-        self.value = value
+    def compute(self, input):
+        self.value = input
+        return input
     
-    def forward(self):
-        return self.value
-    
-    def compute(self, value):
-        return self.save(value)
+    def backward(self, val):
+        return val
     
     def __str__(self):
         if self.name == None:
