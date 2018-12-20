@@ -17,6 +17,8 @@ class Graph:
 
     def __init__(self):
         self.nodes = []
+        self.show_values = False
+        self.show_gradients = False
 
     default_attrs = { 'style': 'filled', 'fontname': 'Helvetica'}
 
@@ -43,16 +45,22 @@ class Graph:
         return None
 
     def to_dot(self, dot):
-        m = {node: i for i, node in enumerate(self.nodes)}
+        m = {node: i for i, node in enumerate(self.topological())}
 
         for node in self:
             attrs = Graph.attr_map[self.type_to_key(node)]
             dot.add_node(pd.Node(m[node], label=f'"{node}"', **attrs))
             
-            l = str(node.value) if node.value is not None else ''
-            for c in node.consumers:
-                if c in self.nodes:
-                    dot.add_edge(pd.Edge(m[node], m[c], label=l))
+            if not self.show_gradients:
+                l = f'{node.value}' if node.value is not None and self.show_values else ''
+                for c in node.consumers:
+                    if c in self.nodes:
+                        dot.add_edge(pd.Edge(m[node], m[c], label=l))
+            
+            if self.show_gradients and node.gradient_values is not None:
+                for i, input_node in enumerate(node.input_nodes):
+                    val = node.gradient_values[i] if len(node.input_nodes) > 1 else node.gradient_values
+                    dot.add_edge(pd.Edge(m[node], m[input_node], label=str(val)))
 
 
     def export(self, open_in_editor=False):
@@ -147,12 +155,12 @@ def traverse_postorder(operation):
 class Session:
 
     def run(self, graph, ctx):
-        for node in graph.topological():
+        for node in graph.graph():
             if isinstance(node, Input):
                 if node.name not in ctx:
                     raise ValueError(f'Value for Input <{node.name}> was not provided in context')
                 x = node.compute(ctx[node.name])
-            elif isinstance(node, Variable) or isinstance(node, Constant):
+            elif issubclass(node.__class__, Variable):
                 x = node.compute()
             else:
                 inputs = [n.value for n in node.input_nodes]

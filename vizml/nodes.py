@@ -6,11 +6,11 @@ import graph
 
 class Node:
 
-    def __init__(self, value=None, derived=None):
+    def __init__(self, value=None):
         self.consumers = []
-        self.input_values = None
+        #self.input_values = None
         self.value = value
-        self.derived = derived
+        self.gradient_values=None
     
     def __add__(self, other):
         return Add(self, other)
@@ -33,27 +33,72 @@ class Node:
             return NotImplemented
     
     def __call__(self, ctx={}):
-        return graph.Session().run(self.graph(), ctx)
+        return self.forward(ctx)
     
     def inputs(self):
         return []
+
+    @property
+    def input_values(self):
+        return [n.value for n in self.input_nodes]
     
-    def compute(self, *inputs):
+    @property
+    def consumer_gradients(self):
+        if len(self.consumers) == 0:
+            output_grad = 1
+        else:
+            output_grad = 0
+            for c in self.consumers:
+                grad = c.gradient_values
+
+                if len(c.input_nodes) == 1:
+                    output_grad += c.gradient_values
+                else:
+                    idx = c.input_nodes.index(self)
+                    output_grad += c.gradient_values[idx]
+
+        return output_grad
+    
+    def compute(self, ctx):
         pass
     
-    def backward(self, a):
+    def compute_backward(self, ctx):
         pass
+
+    def reset_all(self):
+        for node in self.graph.topological():
+            node.reset_value()
+    
+    def reset_value(self):
+        self.value = None
+
+    def forward(self, ctx={}):
+        for node in self.graph.topological():
+            node.compute(ctx)
+        
+        return self.value
+
+    def backward(self, ctx={}):
+        for node in self.graph.topological_reverse():
+            node.compute_backward(ctx)
 
     def _repr_html_(self):
         return graph.of(self).draw()
     
+    def show(self, values=False, gradients=False):
+        g = graph.of(self)
+        g.show_values = values
+        g.show_gradients = gradients
+        return g
+    
+    @property
     def graph(self):
         return graph.of(self)
     
  
 class Operation(Node):
 
-    symbol = None
+    symbol = ''
 
     def op(self, *inputs):
         pass
@@ -72,22 +117,19 @@ class Operation(Node):
     def inputs(self):
         return self.input_nodes
 
-    def compute(self, *inputs):
-        self.input_values = inputs
-        self.value = self.op(*inputs)
+    def compute(self, ctx):
+        self.value = self.op(*self.input_values)
         return self.value
-
-    def backward(self, val):
-        return self.back_op(val)
+    
+    def compute_backward(self, ctx):
+        self.gradient_values = self.back_op(self.consumer_gradients)
+        return self.gradient_values
 
 
 class Binary(Operation):
 
     def __init__(self, l, r):
         super().__init__([l, r])
-    
-    def compute(self, l_val, r_val):
-        return super().compute(l_val, r_val)
 
     def __str__(self):
         return self.symbol
@@ -115,6 +157,17 @@ class Mul(Binary):
         l_val, r_val = self.input_values
         return (val*r_val, val*l_val)
 
+class Pow(Binary):
+
+    symbol = '^'
+
+    def op(self, l_val, r_val):
+        return np.power(l_val, r_val)
+    
+    def back_op(self, val):
+        base, exponent = self.input_values
+        return (val*exponent*np.power(base, exponent-1), val*self.value*np.log(base))
+
 
 #Sub = Binary.create('-', np.subtract, )
 #Div = Binary.create('/', np.divide)
@@ -133,17 +186,20 @@ class Variable(Node):
         super().__init__(initial_value)
     
     
-    def compute(self):
+    def compute(self, ctx):
         return self.value
     
-    def backward(self, val):
+    def compute_backward(self, ctx):
+        self.gradient_values = self.consumer_gradients
+
+    def reset_value(self):
         pass
     
     def __str__(self):
         if self.name is not None:
-            return f'{self.name}←{self.value}'
+            return str(self.name)
         else:
-            return str(self.value)
+            return 'var'
 
 
 class Constant(Variable):
@@ -162,12 +218,13 @@ class Output(Operation):
         super().__init__([input])
         self.name = name
     
-    def compute(self, input):
-        self.value = input
-        return input
+    def compute(self, ctx):
+        self.value = self.input_nodes[0].value
+        return self.value
     
-    def backward(self, val):
-        return 1
+    def compute_backward(self, ctx):
+        self.gradient_values = 1
+        return self.gradient_values
     
     def __str__(self):
         if self.name is None:
@@ -184,12 +241,13 @@ class Input(Node):
 
         super().__init__()
     
-    def compute(self, input):
-        self.value = input
-        return input
+    def compute(self, ctx):
+        self.value = ctx[self.name]
+        return self.value
     
-    def backward(self, val):
-        return val
+    def compute_backward(self, ctx):
+        self.gradient_values = self.consumer_gradients
+        return self.gradient_values
     
     def __str__(self):
         if self.name == None:
