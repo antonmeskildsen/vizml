@@ -4,7 +4,8 @@ from collections import defaultdict
 import numpy as np
 import pydotplus as pd
 
-from nodes import Variable, Operation, Constant, Input, Output
+# TODO Fix mutual imports
+from vizml.nodes import Variable, Operation, Constant, Input, Output
 
 
 def of(*nodes):
@@ -12,6 +13,14 @@ def of(*nodes):
     for node in nodes:
         g.add_all(node)
     return g
+
+
+def _type_to_key(node):
+    for typ, key in Graph.type_conv:
+        if issubclass(node.__class__, typ):
+            return key
+    return None
+
 
 class Graph:
 
@@ -38,21 +47,15 @@ class Graph:
         (Operation, 'operation'),
     ]
 
-    def type_to_key(self, node):
-        for typ, key in Graph.type_conv:
-            if issubclass(node.__class__, typ):
-                return key
-        return None
-
     def to_dot(self, dot):
         m = {node: i for i, node in enumerate(self.topological())}
 
         for node in self:
-            attrs = Graph.attr_map[self.type_to_key(node)]
+            attrs = Graph.attr_map[_type_to_key(node)]
             dot.add_node(pd.Node(m[node], label=f'"{node}"', **attrs))
             
-            if not self.show_gradients:
-                l = f'{node.value}' if node.value is not None and self.show_values else ''
+            if not self.show_gradients or self.show_values:
+                l = f'{node.value}' if node.value is not None else ''
                 for c in node.consumers:
                     if c in self.nodes:
                         dot.add_edge(pd.Edge(m[node], m[c], label=l))
@@ -62,7 +65,6 @@ class Graph:
                     val = node.gradient_values[i] if len(node.input_nodes) > 1 else node.gradient_values
                     dot.add_edge(pd.Edge(m[node], m[input_node], label=str(val)))
 
-
     def export(self, open_in_editor=False):
         out = pd.Dot()
         self.to_dot(out)
@@ -70,9 +72,7 @@ class Graph:
         out.write('resources/t4.pdf', format='pdf')
         if open_in_editor:
             os.system('open /Users/Anton/Documents/git/vizml/resources/t4.pdf')
-        #ng = self.to_nx()
-        #draw(ng, args=['-Nfontname=Fira Code Regular'], format='dot', filename='resources/t2.dot', prefix='hej')
-    
+
     def draw(self):
         out = pd.Dot()
         self.to_dot(out)
@@ -132,7 +132,7 @@ def back(n, a=None):
             back(i, o)
 
 
-def traverse_postorder(operation):
+def traverse_post_order(operation):
     """Performs a post-order traversal, returning a list of nodes
     in the order in which they have to be computed
 
@@ -140,29 +140,13 @@ def traverse_postorder(operation):
        operation: The operation to start traversal at
     """
 
-    nodes_postorder = []
+    nodes_post_order = []
 
     def recurse(node):
         if isinstance(node, Operation):
             for input_node in node.input_nodes:
                 recurse(input_node)
-        nodes_postorder.append(node)
+        nodes_post_order.append(node)
 
     recurse(operation)
-    return nodes_postorder
-
-
-class Session:
-
-    def run(self, graph, ctx):
-        for node in graph.graph():
-            if isinstance(node, Input):
-                if node.name not in ctx:
-                    raise ValueError(f'Value for Input <{node.name}> was not provided in context')
-                x = node.compute(ctx[node.name])
-            elif issubclass(node.__class__, Variable):
-                x = node.compute()
-            else:
-                inputs = [n.value for n in node.input_nodes]
-                x = node.compute(*inputs)
-        return x
+    return nodes_post_order
