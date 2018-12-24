@@ -4,6 +4,8 @@ from collections import defaultdict
 import numpy as np
 import pydotplus as pd
 
+from ._graph_algorithms import DepthFirstOrder
+
 # TODO Fix mutual imports
 from vizml.nodes import Variable, Operation, Constant, Input, Output
 
@@ -29,14 +31,14 @@ class Graph:
         self.show_values = False
         self.show_gradients = False
 
-    default_attrs = { 'style': 'filled', 'fontname': 'Helvetica'}
+    default_attrs = {'style': 'filled', 'fontname': 'Helvetica'}
 
     attr_map = defaultdict(lambda: Graph.default_attrs, {
         'variable': {'fillcolor': '#27AE60', **default_attrs},
-        'operation': { 'fillcolor': '#D35400', **default_attrs},
-        'constant': { 'fillcolor': '#3498DB', **default_attrs},
-        'input': { 'fillcolor': '#3498DB', **default_attrs},
-        'output': { 'fillcolor': '#1ABC9C', **default_attrs},
+        'operation': {'fillcolor': '#D35400', **default_attrs},
+        'constant': {'fillcolor': '#3498DB', **default_attrs},
+        'input': {'fillcolor': '#3498DB', **default_attrs},
+        'output': {'fillcolor': '#1ABC9C', **default_attrs},
     })
 
     type_conv = [
@@ -55,15 +57,20 @@ class Graph:
             dot.add_node(pd.Node(m[node], label=f'"{node}"', **attrs))
             
             if not self.show_gradients or self.show_values:
-                l = f'{node.value}' if node.value is not None else ''
+                label = f'{node.value}' if node.value is not None else ''
                 for c in node.consumers:
                     if c in self.nodes:
-                        dot.add_edge(pd.Edge(m[node], m[c], label=l))
+                        dot.add_edge(pd.Edge(m[node], m[c], label=label))
             
             if self.show_gradients and node.gradient_values is not None:
                 for i, input_node in enumerate(node.input_nodes):
-                    val = node.gradient_values[i] if len(node.input_nodes) > 1 else node.gradient_values
-                    dot.add_edge(pd.Edge(m[node], m[input_node], label=str(val)))
+                    if len(node.input_nodes) > 1:
+                        val = node.gradient_values[i]
+                    else:
+                        val = node.gradient_values
+                    dot.add_edge(pd.Edge(m[node],
+                                         m[input_node],
+                                         label=str(val)))
 
     def export(self, open_in_editor=False):
         out = pd.Dot()
@@ -101,52 +108,3 @@ class Graph:
         
     def __iter__(self):
         return iter(self.topological())
-    
-
-class DepthFirstOrder:
-
-    def __init__(self, graph):
-        self.marked = {node: False for node in graph.nodes}
-
-        self.reverse_post = []
-
-        for node in graph.nodes:
-            if not self.marked[node]:
-                self.dfs(node)
-    
-    def dfs(self, node):
-        self.marked[node] = True
-        for n in node.input_nodes:
-            if not self.marked[n]:
-                self.dfs(n)
-
-        self.reverse_post.append(node)
-
-
-def back(n, a=None):
-    if a is None:
-        a = Constant(1)
-    if isinstance(n, Operation):
-        ol = n.backward(a)
-        for i, o in zip(n.input_nodes, ol):
-            back(i, o)
-
-
-def traverse_post_order(operation):
-    """Performs a post-order traversal, returning a list of nodes
-    in the order in which they have to be computed
-
-    Args:
-       operation: The operation to start traversal at
-    """
-
-    nodes_post_order = []
-
-    def recurse(node):
-        if isinstance(node, Operation):
-            for input_node in node.input_nodes:
-                recurse(input_node)
-        nodes_post_order.append(node)
-
-    recurse(operation)
-    return nodes_post_order

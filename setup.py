@@ -18,4 +18,5 @@ setup(
     license='MIT',
     packages=['vizml'],
     long_description=read('README.md'),
+    install_requires=['numpy', 'hypothesis', 'pytest']
 )
