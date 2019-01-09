@@ -4,10 +4,11 @@ from collections import defaultdict
 import numpy as np
 import pydotplus as pd
 
-from ._graph_algorithms import DepthFirstOrder
+from _graph_algorithms import DepthFirstOrder
 
 # TODO Fix mutual imports
-from vizml.nodes import Variable, Operation, Constant, Input, Output
+from nodes import Variable, Constant, Input, Output
+from operations import Operation
 
 
 def of(*nodes):

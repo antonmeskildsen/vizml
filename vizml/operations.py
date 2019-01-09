@@ -2,7 +2,7 @@ from typing import List
 from abc import ABC, abstractmethod
 
 import numpy as np
-from vizml.nodes import *
+from nodes import *
 
 
 class Operation(Node, ABC):
