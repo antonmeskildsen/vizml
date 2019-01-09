@@ -8,35 +8,30 @@ from vizml import operations
 from vizml import nodes
 
 
-def compatible_shapes(left, right):
-    l_shape = left.shape
-    r_shape = right.shape
-
-    l_idx = 0
-    r_idx = 0
-    while len(l_shape) > l_idx and len(r_shape) > r_idx:
-        if l_shape[l_idx] == r_shape[r_idx]:
-            l_idx += 1
-            r_idx += 1
-        elif l_shape[l_idx] == 1:
-            l_idx += 1
-        elif r_shape[r_idx] == 1:
-            r_idx += 1
-
-    return len(l_shape) == l_idx and len(r_shape) == r_idx
-
-
-array_single = array_shapes(1, 3)
 array_simple_pair = array_shapes(1, 3).flatmap(
     lambda s: tuples(arrays(np.float, s), arrays(np.float, s))
 )
 
-array_matmul_pair = array_shapes(2, 2).flatmap(
+array_matmul_pair = array_shapes(1, 2).flatmap(
     lambda s: tuples(arrays(np.float, s), arrays(np.float, reversed(s)))
 )
 
 
-class TestOperations:
+def generic_forward(node, func, *inputs):
+    # noinspection PyCallingNonCallable
+    assert node.forward_op(*inputs).all() == func(*inputs).all()
+
+
+class TestUnaryOperations:
+
+    unary_ops = [
+        operations.Negative,
+        operations.Log,
+        operations.Sigmoid
+    ]
+
+
+class TestBinaryOperations:
 
     binary_ops = [
         operations.Add,
@@ -65,12 +60,26 @@ class TestOperations:
         (operations.Pow, np.power)
     ]
 
+    # TODO: Is it wrong to test the innards like this?
     @pytest.mark.parametrize('BinOp, func', forward_input)
     @given(array_simple_pair)
     def test_binary_broadcasted_forward(self, BinOp, func, pair):
-        print(pair)
-        l_val, r_val = pair
         node = BinOp(nodes.Input('l'), nodes.Input('r'))
+        generic_forward(node, func, *pair)
 
-        # noinspection PyCallingNonCallable
-        assert node.forward_op(l_val, l_val).all() == func(l_val, l_val).all()
+    @given(array_matmul_pair)
+    def test_matmul_forward(self, pair):
+        node = operations.Matmul(nodes.Input('l'), nodes.Input('r'))
+        generic_forward(node, np.dot, *pair)
+
+    @pytest.mark.parametrize('BinOp', binary_ops)
+    def test_binary_backward(self, BinOp):
+        left = nodes.Input('l')
+        right = nodes.Input('r')
+        node = BinOp(left, right)
+        ctx = {
+            left: 1,
+            right: 1,
+            node: 1
+        }
+        assert len(node.backward(1, ctx)) == 2
